@@ -1,4 +1,6 @@
 let stars = [];
+let missiles = [];
+let explosions = [];
 const palette = ['#9b5de5', '#f15bb5', '#fee440', '#00bbf9', '#00f5d4'];
 
 function setup() {
@@ -37,6 +39,66 @@ function draw() {
   for (let star of stars) {
     star.update();
     star.display();
+  }
+
+  // 處理爆炸特效
+  for (let i = explosions.length - 1; i >= 0; i--) {
+    explosions[i].update();
+    explosions[i].display();
+    if (explosions[i].life <= 0) {
+      explosions.splice(i, 1);
+    }
+  }
+
+  // 處理飛彈與擊中判定
+  for (let i = missiles.length - 1; i >= 0; i--) {
+    let m = missiles[i];
+    m.update();
+    m.display();
+
+    if (m.isOffScreen()) {
+      missiles.splice(i, 1);
+      continue;
+    }
+
+    // 檢查飛彈是否擊中星星
+    for (let j = stars.length - 1; j >= 0; j--) {
+      let s = stars[j];
+      if (dist(m.x, m.y, s.x, s.y) < s.r + m.r) {
+        // 產生爆炸粒子
+        for (let k = 0; k < 15; k++) {
+          explosions.push(new ExplosionParticle(s.x, s.y, s.color));
+        }
+        // 移除飛彈與被擊中的星星
+        missiles.splice(i, 1);
+        stars.splice(j, 1);
+        break; // 此飛彈已爆炸，跳出內圈的星星檢查
+      }
+    }
+  }
+
+  // 繪製中央發射砲台 (箭頭)
+  push();
+  translate(width / 2, height / 2);
+  let arrowAngle = atan2(mouseY - height / 2, mouseX - width / 2);
+  rotate(arrowAngle);
+  fill(200);
+  stroke(255);
+  strokeWeight(2);
+  beginShape();
+  vertex(25, 0);    // 箭頭尖端
+  vertex(-15, -15); // 左後方
+  vertex(-5, 0);    // 尾部凹陷
+  vertex(-15, 15);  // 右後方
+  endShape(CLOSE);
+  pop();
+}
+
+function mousePressed() {
+  // 按下滑鼠左鍵時發射飛彈
+  if (mouseButton === LEFT) {
+    let angle = atan2(mouseY - height / 2, mouseX - width / 2);
+    missiles.push(new Missile(angle));
   }
 }
 
@@ -230,6 +292,67 @@ class Star {
       arc(0, this.r * 0.25, this.r * 0.5, this.r * 0.4, 0, PI);
     }
 
+    pop();
+  }
+}
+
+// === 新增：飛彈 Class ===
+class Missile {
+  constructor(angle) {
+    this.x = width / 2;
+    this.y = height / 2;
+    this.speed = 15; // 飛彈速度
+    this.vx = cos(angle) * this.speed;
+    this.vy = sin(angle) * this.speed;
+    this.r = 4;
+    this.color = '#ccff00'; // 螢光黃色
+  }
+  update() {
+    this.x += this.vx;
+    this.y += this.vy;
+  }
+  display() {
+    push();
+    stroke(this.color);
+    strokeWeight(this.r * 2);
+    // 利用 drawingContext 添加發光特效
+    drawingContext.shadowBlur = 10;
+    drawingContext.shadowColor = this.color;
+    // 畫一條小短線，配合半透明背景會產生極佳的淡淡拖影感
+    line(this.x - this.vx * 0.5, this.y - this.vy * 0.5, this.x, this.y);
+    pop();
+  }
+  isOffScreen() {
+    return this.x < 0 || this.x > width || this.y < 0 || this.y > height;
+  }
+}
+
+// === 新增：爆炸粒子 Class ===
+class ExplosionParticle {
+  constructor(x, y, baseColor) {
+    this.x = x;
+    this.y = y;
+    let angle = random(TWO_PI);
+    let speed = random(2, 8);
+    this.vx = cos(angle) * speed;
+    this.vy = sin(angle) * speed;
+    this.life = 255;
+    // 爆炸的碎片有時候是星星的顏色，有時候是飛彈的螢光黃
+    this.color = random() > 0.3 ? baseColor : '#ccff00';
+    this.size = random(3, 8);
+  }
+  update() {
+    this.x += this.vx;
+    this.y += this.vy;
+    this.life -= 8; // 控制消散速度
+  }
+  display() {
+    push();
+    noStroke();
+    let c = color(this.color);
+    c.setAlpha(this.life);
+    fill(c);
+    ellipse(this.x, this.y, this.size);
     pop();
   }
 }
