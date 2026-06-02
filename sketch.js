@@ -1,6 +1,12 @@
 let stars = [];
 let missiles = [];
 let explosions = [];
+let score = 0;
+let timeLeft = 30;
+let gameState = 'PLAYING'; // 遊戲狀態：'PLAYING', 'GAMEOVER', 'ENDED'
+let lastTickTime = 0;
+let lastSpawnTime = 0;
+
 const palette = ['#9b5de5', '#f15bb5', '#fee440', '#00bbf9', '#00f5d4'];
 
 function setup() {
@@ -15,90 +21,196 @@ function setup() {
     stars.push(new Star());
   }
   
-  // 每隔 3 秒鐘 (3000 毫秒) 產生一個新的星星物件
-  setInterval(() => {
-    stars.push(new Star());
-  }, 3000);
+  lastSpawnTime = millis();
+  lastTickTime = millis();
 }
 
 function draw() {
-  // 繪製半透明黑色背景，產生淡淡的拖影效果
-  push();
-  fill(0, 40);
-  noStroke();
-  rect(0, 0, width, height);
-  pop();
+  if (gameState === 'PLAYING') {
+    // 繪製半透明黑色背景，產生淡淡的拖影效果
+    push();
+    fill(0, 40);
+    noStroke();
+    rect(0, 0, width, height);
+    pop();
 
-  // 處理所有星星之間的互相碰撞
-  for (let i = 0; i < stars.length; i++) {
-    for (let j = i + 1; j < stars.length; j++) {
-      stars[i].collide(stars[j]);
-    }
-  }
-
-  for (let star of stars) {
-    star.update();
-    star.display();
-  }
-
-  // 處理爆炸特效
-  for (let i = explosions.length - 1; i >= 0; i--) {
-    explosions[i].update();
-    explosions[i].display();
-    if (explosions[i].life <= 0) {
-      explosions.splice(i, 1);
-    }
-  }
-
-  // 處理飛彈與擊中判定
-  for (let i = missiles.length - 1; i >= 0; i--) {
-    let m = missiles[i];
-    m.update();
-    m.display();
-
-    if (m.isOffScreen()) {
-      missiles.splice(i, 1);
-      continue;
-    }
-
-    // 檢查飛彈是否擊中星星
-    for (let j = stars.length - 1; j >= 0; j--) {
-      let s = stars[j];
-      if (dist(m.x, m.y, s.x, s.y) < s.r + m.r) {
-        // 產生爆炸粒子
-        for (let k = 0; k < 15; k++) {
-          explosions.push(new ExplosionParticle(s.x, s.y, s.color));
-        }
-        // 移除飛彈與被擊中的星星
-        missiles.splice(i, 1);
-        stars.splice(j, 1);
-        break; // 此飛彈已爆炸，跳出內圈的星星檢查
+    // 處理倒數計時
+    if (millis() - lastTickTime >= 1000) {
+      timeLeft--;
+      lastTickTime = millis();
+      if (timeLeft <= 0) {
+        gameState = 'GAMEOVER';
       }
     }
-  }
 
-  // 繪製中央發射砲台 (箭頭)
-  push();
-  translate(width / 2, height / 2);
-  let arrowAngle = atan2(mouseY - height / 2, mouseX - width / 2);
-  rotate(arrowAngle);
-  fill(200);
-  stroke(255);
-  strokeWeight(2);
-  beginShape();
-  vertex(25, 0);    // 箭頭尖端
-  vertex(-15, -15); // 左後方
-  vertex(-5, 0);    // 尾部凹陷
-  vertex(-15, 15);  // 右後方
-  endShape(CLOSE);
-  pop();
+    // 處理動態生成星星：隨時間加快生成星星 (從3秒縮短到0.5秒)
+    let spawnInterval = map(timeLeft, 30, 0, 3000, 500);
+    if (millis() - lastSpawnTime >= spawnInterval) {
+      stars.push(new Star());
+      lastSpawnTime = millis();
+    }
+
+    // 處理所有星星之間的互相碰撞
+    for (let i = 0; i < stars.length; i++) {
+      for (let j = i + 1; j < stars.length; j++) {
+        stars[i].collide(stars[j]);
+      }
+    }
+
+    for (let star of stars) {
+      star.update();
+      star.display();
+    }
+
+    // 處理爆炸特效
+    for (let i = explosions.length - 1; i >= 0; i--) {
+      explosions[i].update();
+      explosions[i].display();
+      if (explosions[i].life <= 0) {
+        explosions.splice(i, 1);
+      }
+    }
+
+    // 處理飛彈與擊中判定
+    for (let i = missiles.length - 1; i >= 0; i--) {
+      let m = missiles[i];
+      m.update();
+      m.display();
+
+      if (m.isOffScreen()) {
+        missiles.splice(i, 1);
+        continue;
+      }
+
+      // 檢查飛彈是否擊中星星
+      for (let j = stars.length - 1; j >= 0; j--) {
+        let s = stars[j];
+        if (dist(m.x, m.y, s.x, s.y) < s.r + m.r) {
+          // 產生爆炸粒子
+          for (let k = 0; k < 15; k++) {
+            explosions.push(new ExplosionParticle(s.x, s.y, s.color));
+          }
+          // 移除飛彈與被擊中的星星
+          missiles.splice(i, 1);
+          stars.splice(j, 1);
+          score += 10; // 加 10 分
+          break; // 此飛彈已爆炸，跳出內圈的星星檢查
+        }
+      }
+    }
+
+    // 繪製中央發射砲台 (箭頭)
+    push();
+    translate(width / 2, height / 2);
+    let arrowAngle = atan2(mouseY - height / 2, mouseX - width / 2);
+    rotate(arrowAngle);
+    fill(200);
+    stroke(255);
+    strokeWeight(2);
+    beginShape();
+    vertex(25, 0);    // 箭頭尖端
+    vertex(-15, -15); // 左後方
+    vertex(-5, 0);    // 尾部凹陷
+    vertex(-15, 15);  // 右後方
+    endShape(CLOSE);
+    pop();
+
+    // 顯示分數與時間
+    fill(255);
+    noStroke();
+    textSize(24);
+    textAlign(LEFT, TOP);
+    text(`Score: ${score}`, 20, 20);
+    
+    // 倒數最後 5 秒閃爍與紅色警告
+    if (timeLeft <= 5) {
+      if (millis() % 500 < 250) {
+        fill(255, 50, 50);
+        text(`Time: ${timeLeft}`, 20, 50);
+      }
+    } else {
+      text(`Time: ${timeLeft}`, 20, 50);
+    }
+    
+  } else if (gameState === 'GAMEOVER') {
+    // 遊戲結束畫面
+    background(0, 40); // 逐漸變黑
+    
+    fill(255);
+    noStroke();
+    textAlign(CENTER, CENTER);
+    textSize(64);
+    text("GAME OVER", width / 2, height / 2 - 80);
+    
+    textSize(32);
+    fill(255, 255, 0);
+    text(`Final Score: ${score}`, width / 2, height / 2 - 10);
+    
+    let btnW = 160;
+    let btnH = 50;
+    let restartX = width / 2 - btnW - 10;
+    let endX = width / 2 + 10;
+    let btnY = height / 2 + 50;
+    
+    // Restart 按鈕
+    fill(mouseInRect(restartX, btnY, btnW, btnH) ? color('#00f5d4') : color('#00bbf9'));
+    rect(restartX, btnY, btnW, btnH, 10);
+    fill(0);
+    textSize(24);
+    text("Restart", restartX + btnW / 2, btnY + btnH / 2);
+
+    // End 按鈕
+    fill(mouseInRect(endX, btnY, btnW, btnH) ? color('#f15bb5') : color('#9b5de5'));
+    rect(endX, btnY, btnW, btnH, 10);
+    fill(255);
+    text("End", endX + btnW / 2, btnY + btnH / 2);
+
+  } else if (gameState === 'ENDED') {
+    background(0);
+    fill(255);
+    noStroke();
+    textAlign(CENTER, CENTER);
+    textSize(48);
+    text("Thank you for playing!", width / 2, height / 2);
+  }
+}
+
+// 輔助判斷滑鼠是否在按鈕內的函數
+function mouseInRect(rx, ry, rw, rh) {
+  return mouseX >= rx && mouseX <= rx + rw && mouseY >= ry && mouseY <= ry + rh;
 }
 
 function mousePressed() {
-  // 按下滑鼠左鍵時發射飛彈
-  if (mouseButton === LEFT) {
-    let angle = atan2(mouseY - height / 2, mouseX - width / 2);
-    missiles.push(new Missile(angle));
+  if (gameState === 'PLAYING') {
+    // 按下滑鼠左鍵時發射飛彈
+    if (mouseButton === LEFT) {
+      let angle = atan2(mouseY - height / 2, mouseX - width / 2);
+      missiles.push(new Missile(angle));
+    }
+  } else if (gameState === 'GAMEOVER') {
+    let btnW = 160;
+    let btnH = 50;
+    let restartX = width / 2 - btnW - 10;
+    let endX = width / 2 + 10;
+    let btnY = height / 2 + 50;
+
+    if (mouseInRect(restartX, btnY, btnW, btnH)) {
+      // 重新開始遊戲
+      score = 0;
+      timeLeft = 30;
+      stars = [];
+      missiles = [];
+      explosions = [];
+      for (let i = 0; i < 20; i++) {
+        stars.push(new Star());
+      }
+      lastTickTime = millis();
+      lastSpawnTime = millis();
+      gameState = 'PLAYING';
+    } else if (mouseInRect(endX, btnY, btnW, btnH)) {
+      // 結束遊戲
+      gameState = 'ENDED';
+    }
   }
 }
 
@@ -110,6 +222,9 @@ function windowResized() {
 // 星星粒子 Class
 class Star {
   constructor() {
+    // 依據剩餘時間決定速度倍率 (1 到 3 倍)
+    let speedMult = map(timeLeft, 30, 0, 1, 3);
+    
     // 亂數決定星星的大小
     this.r = random(20, 45); 
     
@@ -118,8 +233,8 @@ class Star {
     this.y = random(this.r * 2, height - this.r * 2);
     
     // 亂數決定移動速度
-    this.vx = random(-2, 2);
-    this.vy = random(-2, 2);
+    this.vx = random(-2, 2) * speedMult;
+    this.vy = random(-2, 2) * speedMult;
     
     // 亂數分配顏色
     this.color = random(palette);
@@ -172,6 +287,8 @@ class Star {
   }
 
   update() {
+    let speedMult = map(timeLeft, 30, 0, 1, 3);
+    
     // 計算星星與滑鼠之間的距離
     let d = dist(this.x, this.y, mouseX, mouseY);
     
@@ -182,22 +299,22 @@ class Star {
     if (this.isScared) {
       // 當被嚇到時：計算滑鼠到星星的反向角度，並給予逃離的加速度
       let angleToMouse = atan2(this.y - mouseY, this.x - mouseX);
-      this.vx += cos(angleToMouse) * 1.5;
-      this.vy += sin(angleToMouse) * 1.5;
+      this.vx += cos(angleToMouse) * 1.5 * speedMult;
+      this.vy += sin(angleToMouse) * 1.5 * speedMult;
     }
 
     // 控制移動速度 (計算當前的向量長度)
     let speed = dist(0, 0, this.vx, this.vy);
-    let maxSpeed = this.isScared ? 12 : 3;
+    let maxSpeed = (this.isScared ? 12 : 3) * speedMult;
 
     // 如果超過最高速，或是逃離後要減速，利用摩擦力漸漸緩下來
     if (speed > maxSpeed) {
       this.vx *= 0.92;
       this.vy *= 0.92;
-    } else if (!this.isScared && speed < 1) {
+    } else if (!this.isScared && speed < 1 * speedMult) {
       // 如果沒有被嚇到且速度太慢，給予微微的亂數動力讓它繼續漂浮
-      this.vx += random(-0.2, 0.2);
-      this.vy += random(-0.2, 0.2);
+      this.vx += random(-0.2, 0.2) * speedMult;
+      this.vy += random(-0.2, 0.2) * speedMult;
     }
 
     // 更新位置
